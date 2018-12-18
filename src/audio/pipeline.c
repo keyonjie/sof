@@ -1174,6 +1174,7 @@ void pipeline_xrun(struct pipeline *p, struct comp_dev *dev,
 	int32_t bytes)
 {
 	struct sof_ipc_stream_posn posn;
+	int ret;
 
 	/* don't flood host */
 	if (p->xrun_bytes)
@@ -1182,6 +1183,12 @@ void pipeline_xrun(struct pipeline *p, struct comp_dev *dev,
 	/* only send when we are running */
 	if (dev->state != COMP_STATE_ACTIVE)
 		return;
+
+	/* notify all pipeline comps we are in XRUN, and stop copying */
+	ret = pipeline_trigger(p, p->source_comp, COMP_TRIGGER_XRUN);
+	if (ret < 0)
+		trace_pipe_error_with_ids(p, "pipeline_xrun() error: Pipelines notification about XRUN failed, ret = %d",
+					  ret);
 
 	memset(&posn, 0, sizeof(posn));
 	p->xrun_bytes = posn.xrun_size = bytes;
@@ -1192,6 +1199,7 @@ void pipeline_xrun(struct pipeline *p, struct comp_dev *dev,
 	} else {
 		pipeline_for_each_downstream(p, SOF_COMP_HOST, dev, xrun, &posn);
 	}
+
 }
 
 /* copy data from upstream source endpoints to downstream endpoints*/
@@ -1210,43 +1218,41 @@ static int pipeline_copy(struct comp_dev *dev)
 	return 0;
 }
 
+#if NO_XRUN_RECOVERY
+/* recover the pipeline from a XRUN condition */
+static int pipeline_xrun_recover(struct pipeline *p)
+{
+	return -EINVAL;
+}
+#else
 /* recover the pipeline from a XRUN condition */
 static int pipeline_xrun_recover(struct pipeline *p)
 {
 	int ret;
 
-	trace_pipe_error_with_ids(p, "pipeline_xrun_recover()");
-
-	/* notify all pipeline comps we are in XRUN */
-	ret = pipeline_trigger(p, p->source_comp, COMP_TRIGGER_XRUN);
-	if (ret < 0) {
-		trace_pipe_error_with_ids(p, "pipeline_xrun_recover() error: "
-					  "Pipelines notification about XRUN "
-					  "failed, ret = %d", ret);
-		return ret;
-	}
-	p->xrun_bytes = 0;
+	trace_pipe_with_ids(p, "pipeline_xrun_recover()");
 
 	/* prepare the pipeline */
 	ret = pipeline_prepare(p, p->source_comp);
 	if (ret < 0) {
-		trace_pipe_error_with_ids(p, "pipeline_xrun_recover() error: "
-					  "pipeline_prepare() failed, ret = %d",
+		trace_pipe_error_with_ids(p, "pipeline_xrun_recover() error: pipeline_prepare() failed, ret = %d",
 					  ret);
 		return ret;
 	}
 
+	p->xrun_bytes = 0;
+
 	/* restart pipeline comps */
 	ret = pipeline_trigger(p, p->source_comp, COMP_TRIGGER_START);
 	if (ret < 0) {
-		trace_pipe_error_with_ids(p, "pipeline_xrun_recover() error: "
-					  "pipeline_trigger() failed, ret = %d",
+		trace_pipe_error_with_ids(p, "pipeline_xrun_recover() error: pipeline_trigger() failed, ret = %d",
 					  ret);
 		return ret;
 	}
 
 	return 0;
 }
+#endif
 
 /* notify pipeline that this component requires buffers emptied/filled */
 void pipeline_schedule_copy(struct pipeline *p, uint64_t start)
@@ -1298,17 +1304,18 @@ static void pipeline_task(void *arg)
 	if (p->xrun_bytes) {
 		err = pipeline_xrun_recover(p);
 		if (err < 0)
-			return; /* failed - host will stop this pipeline */
-		goto sched;
+			goto sched;/* skip copy if still in xrun */
 	}
 
 	err = pipeline_copy(dev);
 	if (err < 0) {
 		err = pipeline_xrun_recover(p);
-		if (err < 0)
+		if (err < 0) {
+			trace_pipe_error_with_ids(p, "pipeline_task(): xrun recover failed! pipeline will be stopped!");
 			return; /* failed - host will stop this pipeline */
+		}
 	}
 
 sched:
-	tracev_pipe_with_ids(p, "pipeline_task() reschedule");
+	tracev_pipe_with_ids(p, "pipeline_task() done");
 }
