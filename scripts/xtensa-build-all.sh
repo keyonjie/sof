@@ -140,7 +140,7 @@ do
 	if [ $j == "apl" ]
 	then
 		PLATFORM="apollolake"
-		ARCH="xtensa-smp"
+		ARCH="xtensa"
 		XTENSA_CORE="X4H3I16w2D48w3a_2017_8"
 
 		# test APL compiler aliases and ignore set -e here
