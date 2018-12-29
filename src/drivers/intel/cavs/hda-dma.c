@@ -327,20 +327,21 @@ static int hda_dma_host_preload(struct dma *dma, struct hda_chan_data *chan)
 	};
 	int i;
 	int period_cnt;
+	int count = 20;
 
+#if 0
 	uint64_t deadline = platform_timer_get(platform_timer) +
 			    clock_ms_to_ticks(PLATFORM_DEFAULT_CLOCK, 1) *
 					      PLATFORM_HOST_DMA_TIMEOUT / 1000;
+#endif
 
 	/* waiting for buffer full after start
 	 * first try is unblocking, then blocking
 	 */
 	while (!(host_dma_reg_read(dma, chan->index, DGCS) & DGCS_BF) &&
-	       (chan->state & HDA_STATE_BF_WAIT)) {
-		if (deadline < platform_timer_get(platform_timer)) {
-			return -ETIME;
-		}
-	}
+//	       (chan->state & HDA_STATE_BF_WAIT))
+	       (chan->state & HDA_STATE_BF_WAIT) && (count-- > 0))
+		; /* TODO: this should timeout and not wait forever */
 
 	if (host_dma_reg_read(dma, chan->index, DGCS) & DGCS_BF) {
 		chan->state &= ~(HDA_STATE_HOST_PRELOAD | HDA_STATE_BF_WAIT);
@@ -355,7 +356,9 @@ static int hda_dma_host_preload(struct dma *dma, struct hda_chan_data *chan)
 		}
 	} else {
 		/* next call in pre-load state will be blocking */
-		chan->state |= HDA_STATE_BF_WAIT;
+//		chan->state |= HDA_STATE_BF_WAIT;
+
+		chan->state &= ~(HDA_STATE_HOST_PRELOAD | HDA_STATE_BF_WAIT);
 	}
 
 	return 0;
@@ -580,8 +583,8 @@ static int hda_dma_channel_get(struct dma *dma, int channel)
 
 	/* DMAC has no free channels */
 	spin_unlock_irq(&dma->lock, flags);
-	trace_hddma_error("hda-dmac: %d no free channel %d", dma->plat_data.id,
-			  channel);
+	trace_hddma_error("hda-dmac: %d no free channel %d, status: %d", dma->plat_data.id,
+			  channel, p->chan[channel].status);
 	return -ENODEV;
 }
 
@@ -605,6 +608,8 @@ static void hda_dma_channel_put_unlocked(struct dma *dma, int channel)
 	p->chan[channel].cb_type = 0;
 	p->chan[channel].cb_data = NULL;
 	work_init(&p->chan[channel].dma_ch_work, NULL, NULL, 0);
+	trace_hddma_error("hda-dmac: %d put channel %d",
+			  dma->plat_data.id, channel);
 }
 
 /* channel must not be running when this is called */
@@ -738,7 +743,7 @@ static int hda_dma_stop(struct dma *dma, int channel)
 	hda_dma_ptr_trace(&p->chan[channel], "last-copy", HDA_DBG_BOTH);
 	hda_dma_get_dbg_vals(&p->chan[channel], HDA_DBG_PRE, HDA_DBG_BOTH);
 
-	trace_hddma("hda-dmac: %d channel %d -> stop", dma->plat_data.id,
+	trace_hddma_error("hda-dmac: %d channel %d -> stop", dma->plat_data.id,
 		    channel);
 
 	if (p->chan[channel].dma_ch_work.cb)
