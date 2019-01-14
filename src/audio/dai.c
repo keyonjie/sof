@@ -487,12 +487,10 @@ static int dai_prepare(struct comp_dev *dev)
 
 	dd->pointer_init = 0;
 
-	/* dma reconfig not required if XRUN handling */
-	if (dd->xrun) {
+	/* dma reconfig is required after XRUN handled */
+	if (dd->xrun)
 		/* after prepare, we have recovered from xrun */
 		dd->xrun = 0;
-		return ret;
-	}
 
 	ret = dma_set_config(dd->dma, dd->chan, &dd->config);
 	if (ret < 0)
