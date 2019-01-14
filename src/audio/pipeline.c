@@ -29,6 +29,7 @@
  *         Keyon Jie <yang.jie@linux.intel.com>
  */
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <errno.h>
@@ -761,6 +762,68 @@ static int pipeline_trigger_on_core(struct pipeline *p, struct comp_dev *host,
 	return ret;
 }
 
+/*
+ * check if we need real trigger for the pipeline.
+ * return true if we need process real trigger, false if doesn't.
+ */
+static bool pipeline_is_trigger_needed(struct pipeline *p, int cmd)
+{
+	int ret;
+
+	switch (cmd) {
+	case COMP_TRIGGER_START:
+	case COMP_TRIGGER_RELEASE:
+		/* for xrun, we need prepare pipeline before start it */
+		if (p->status == COMP_STATE_PREPARE && p->xrun_bytes) {
+			/* prepare the pipeline */
+			ret = pipeline_prepare(p, p->source_comp);
+			if (ret < 0) {
+				trace_pipe_error_with_ids(p, "pipeline_xrun_recover() error: pipeline_prepare() failed, ret = %d",
+							  ret);
+				return false;
+			}
+			/* xrun is recovered */
+			p->xrun_bytes = 0;
+		}
+
+		if (p->status == COMP_STATE_ACTIVE) {
+			trace_pipe_with_ids(p, "pipeline_trigger(): already active, won't trigger start/release again.");
+			return false;
+		}
+		break;
+	case COMP_TRIGGER_STOP:
+		/* fallthrough */
+	case COMP_TRIGGER_XRUN:
+		if (p->status == COMP_STATE_PREPARE) {
+			trace_pipe_with_ids(p, "pipeline_trigger(): already stopped, won't trigger stop again.");
+			return false;
+		}
+		break;
+	case COMP_TRIGGER_PAUSE:
+		if (p->status == COMP_STATE_PAUSED) {
+			trace_pipe_with_ids(p, "pipeline_trigger(): already paused, won't trigger pause again.");
+			return false;
+		}
+		break;
+	case COMP_TRIGGER_RESET:
+		if (p->status == COMP_STATE_READY) {
+			trace_pipe_with_ids(p, "pipeline_trigger(): already in ready, won't trigger reset again.");
+			return false;
+		}
+		break;
+	case COMP_TRIGGER_PREPARE:
+		if (p->status == COMP_STATE_PREPARE) {
+			trace_pipe_with_ids(p, "pipeline_trigger(): already in prepared, won't trigger prepare again.");
+			return false;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return true;
+}
+
 /* send pipeline component/endpoint a command */
 int pipeline_trigger(struct pipeline *p, struct comp_dev *host, int cmd)
 {
@@ -769,6 +832,10 @@ int pipeline_trigger(struct pipeline *p, struct comp_dev *host, int cmd)
 	uint32_t flags;
 
 	trace_pipe_with_ids(p, "pipeline_trigger()");
+
+	if (!pipeline_is_trigger_needed(p, cmd))
+		/* return success to make further process possible */
+		return 0;
 
 	/* if current core is different than requested */
 	if (p->ipc_pipe.core != cpu_get_id())
