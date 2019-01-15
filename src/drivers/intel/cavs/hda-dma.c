@@ -118,7 +118,7 @@ struct dma_pdata {
 	struct hda_chan_data chan[HDA_DMA_MAX_CHANS];
 };
 
-static int hda_dma_stop(struct dma *dma, int channel);
+static int hda_dma_stop_unlock(struct dma *dma, int channel);
 
 static inline uint32_t host_dma_reg_read(struct dma *dma, uint32_t chan,
 	uint32_t reg)
@@ -260,7 +260,7 @@ static int hda_dma_copy_ch(struct dma *dma, struct hda_chan_data *chan,
 		chan->cb(chan->cb_data, DMA_IRQ_TYPE_LLIST, &next);
 		if (next.size == DMA_RELOAD_END) {
 			/* disable channel, finished */
-			hda_dma_stop(dma, chan->index);
+			hda_dma_stop_unlock(dma, chan->index);
 		}
 	}
 	spin_unlock_irq(&dma->lock, flags);
@@ -271,12 +271,9 @@ static int hda_dma_copy_ch(struct dma *dma, struct hda_chan_data *chan,
 	return 0;
 }
 
-static void hda_dma_init(struct dma *dma, int channel)
+static void hda_dma_init_unlock(struct dma *dma, int channel)
 {
 	struct dma_pdata *p = dma_get_drvdata(dma);
-	uint32_t flags;
-
-	spin_lock_irq(&dma->lock, flags);
 
 	trace_host("hda-dma-init %p ch %d", (uintptr_t)dma, channel);
 
@@ -297,8 +294,19 @@ static void hda_dma_init(struct dma *dma, int channel)
 
 	p->chan[channel].state &= ~(HDA_STATE_INIT | HDA_STATE_RELEASE);
 
+}
+
+static void hda_dma_init(struct dma *dma, int channel)
+{
+	uint32_t flags;
+
+	spin_lock_irq(&dma->lock, flags);
+
+	hda_dma_init_unlock(dma, channel);
+
 	spin_unlock_irq(&dma->lock, flags);
 }
+
 
 static uint64_t hda_dma_work(void *data, uint64_t delay)
 {
@@ -426,7 +434,7 @@ static int hda_dma_start(struct dma *dma, int channel)
 		work_schedule_default(&p->chan[channel].dma_ch_work,
 				      HDA_LINK_1MS_US);
 	} else {
-		hda_dma_init(dma, channel);
+		hda_dma_init_unlock(dma, channel);
 	}
 
 out:
@@ -475,12 +483,9 @@ out:
 	return 0;
 }
 
-static int hda_dma_stop(struct dma *dma, int channel)
+static int hda_dma_stop_unlock(struct dma *dma, int channel)
 {
 	struct dma_pdata *p = dma_get_drvdata(dma);
-	uint32_t flags;
-
-	spin_lock_irq(&dma->lock, flags);
 
 	trace_host("DDi");
 
@@ -491,6 +496,17 @@ static int hda_dma_stop(struct dma *dma, int channel)
 	hda_update_bits(dma, channel, DGCS, DGCS_GEN | DGCS_FIFORDY, 0);
 	p->chan[channel].status = COMP_STATE_PREPARE;
 	p->chan[channel].state = 0;
+
+	return 0;
+}
+
+static int hda_dma_stop(struct dma *dma, int channel)
+{
+	uint32_t flags;
+
+	spin_lock_irq(&dma->lock, flags);
+
+	hda_dma_stop_unlock(dma, channel);
 
 	spin_unlock_irq(&dma->lock, flags);
 	return 0;
