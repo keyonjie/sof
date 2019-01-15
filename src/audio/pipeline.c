@@ -210,9 +210,18 @@ static void pipeline_trigger_sched_comp(struct pipeline *p,
 
 	switch (cmd) {
 	case COMP_TRIGGER_PAUSE:
-	case COMP_TRIGGER_STOP:
 		pipeline_schedule_cancel(p);
 		p->status = COMP_STATE_PAUSED;
+		break;
+#if NO_XRUN_RECOVERY
+	/* stop pipeline at xrun if no internal xrun recovery */
+	case COMP_TRIGGER_XRUN:
+		/* fall through */
+#endif
+	case COMP_TRIGGER_STOP:
+		trace_pipe_with_ids(p, "pipeline_trigger_sched_comp(): STOP");
+		pipeline_schedule_cancel(p);
+		p->status = COMP_STATE_PREPARE;
 		break;
 	case COMP_TRIGGER_RELEASE:
 	case COMP_TRIGGER_START:
@@ -231,7 +240,6 @@ static void pipeline_trigger_sched_comp(struct pipeline *p,
 		break;
 	case COMP_TRIGGER_SUSPEND:
 	case COMP_TRIGGER_RESUME:
-	case COMP_TRIGGER_XRUN:
 	default:
 		break;
 	}
