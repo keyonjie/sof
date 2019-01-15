@@ -81,6 +81,8 @@ struct task {
 	/* runtime duration in scheduling clock base */
 	uint64_t max_rtime;		/* max time taken to run */
 	completion_t complete;
+
+	uint32_t pending_cnt;
 };
 
 struct schedule_data **arch_schedule_get(void);
@@ -101,6 +103,7 @@ static inline void schedule_task_init(struct task *task, void (*func)(void *),
 	void *data)
 {
 	task->core = 0;
+	task->pending_cnt = 0;
 	task->state = TASK_STATE_INIT;
 	task->func = func;
 	task->data = data;
@@ -109,6 +112,7 @@ static inline void schedule_task_init(struct task *task, void (*func)(void *),
 static inline void schedule_task_free(struct task *task)
 {
 	task->state = TASK_STATE_FREE;
+	task->pending_cnt = 0;
 	task->func = NULL;
 	task->data = NULL;
 }
