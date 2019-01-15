@@ -465,6 +465,7 @@ static int volume_copy(struct comp_dev *dev)
 	struct comp_data *cd = comp_get_drvdata(dev);
 	struct comp_buffer *sink;
 	struct comp_buffer *source;
+	static int n = 0;
 
 	tracev_volume("volume_copy()");
 
@@ -473,6 +474,14 @@ static int volume_copy(struct comp_dev *dev)
 				 struct comp_buffer, sink_list);
 	sink = list_first_item(&dev->bsink_list,
 			       struct comp_buffer, source_list);
+
+	/*HACK for xrun debug */
+	if (n++ == 10000) {
+		trace_volume_error("Keyon: hack for xrun debug!");
+		n = 0;
+		comp_underrun(dev, source, 3 * cd->source_period_bytes, 0);
+		return -EIO;	/* xrun */
+	}
 
 	/* make sure source component buffer has enough data available and that
 	 * the sink component buffer has enough free bytes for copy. Also

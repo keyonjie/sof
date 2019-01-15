@@ -663,6 +663,18 @@ static int dai_copy(struct comp_dev *dev)
 {
 	struct dai_data *dd = comp_get_drvdata(dev);
 	int ret;
+	struct comp_buffer *source;
+	static int m = 5000;
+
+	/*HACK for xrun debug */
+	if (m++ == 10000) {
+		m = 0;
+		source = list_first_item(&dev->bsource_list,
+					 struct comp_buffer, sink_list);
+		trace_dai_error("Keyon: hack for xrun debug!");
+		comp_underrun(dev, source, 3 * dd->period_bytes, 0);
+		return -EIO;	/* xrun */
+	}
 
 	if (dd->pointer_init == DAI_PTR_INIT_HOST) {
 		/* start the DAI */
