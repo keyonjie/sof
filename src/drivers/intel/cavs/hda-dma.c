@@ -190,12 +190,13 @@ static int hda_dma_preload(struct dma *dma, struct hda_chan_data *chan)
 	};
 	int i;
 	int period_cnt;
+	int count = 20;
 
 	/* waiting for buffer full after start
 	 * first try is unblocking, then blocking
 	 */
 	while (!(host_dma_reg_read(dma, chan->index, DGCS) & DGCS_BF) &&
-	       (chan->state & HDA_STATE_BF_WAIT))
+	       (chan->state & HDA_STATE_BF_WAIT) && (count-- > 0))
 		;
 
 	if (host_dma_reg_read(dma, chan->index, DGCS) & DGCS_BF) {
@@ -211,7 +212,9 @@ static int hda_dma_preload(struct dma *dma, struct hda_chan_data *chan)
 		}
 	} else {
 		/* next call in pre-load state will be blocking */
-		chan->state |= HDA_STATE_BF_WAIT;
+//		chan->state |= HDA_STATE_BF_WAIT;
+
+		chan->state &= ~(HDA_STATE_PRELOAD | HDA_STATE_BF_WAIT);
 	}
 
 	return 0;
