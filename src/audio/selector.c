@@ -332,7 +332,7 @@ static int selector_prepare(struct comp_dev *dev)
 	struct comp_data *cd = comp_get_drvdata(dev);
 	struct comp_buffer *sinkb;
 	struct comp_buffer *sourceb;
-	struct sof_ipc_comp_config *config = COMP_GET_CONFIG(dev);
+//	struct sof_ipc_comp_config *config = COMP_GET_CONFIG(dev);
 	int ret;
 
 	trace_selector("selector_prepare()");
@@ -363,6 +363,8 @@ static int selector_prepare(struct comp_dev *dev)
 		       sourceb->sink->params.channels);
 	trace_selector("selector_prepare(): sink->params.channels = %u",
 		       sinkb->sink->params.channels);
+
+#if 0
 
 	/* set downstream buffer size */
 	ret = buffer_set_size(sinkb, cd->sink_period_bytes *
@@ -406,10 +408,11 @@ static int selector_prepare(struct comp_dev *dev)
 		ret = -EINVAL;
 		goto err;
 	}
+#endif
 
 	return 0;
 
-err:
+//err:
 	comp_set_state(dev, COMP_TRIGGER_RESET);
 	return ret;
 }
