@@ -114,11 +114,37 @@ static struct comp_dev *kpb_new(struct sof_ipc_comp *comp)
 	return dev;
 }
 
+static void kpb_init_kd_dev(struct comp_dev *dev)
+{
+	struct comp_data *kpb = comp_get_drvdata(dev);
+	struct list_item *buffer_list = comp_buffer_list(dev, PPL_DIR_DOWNSTREAM);
+	struct list_item *clist;
+	struct comp_buffer *buffer;
+	struct comp_dev *buffer_comp;
+
+	if (kpb->kd_dev)
+		return;
+
+	list_for_item(clist, buffer_list) {
+		buffer = buffer_from_list(clist, struct comp_buffer, PPL_DIR_DOWNSTREAM);
+
+		buffer_comp = buffer_get_comp(buffer, PPL_DIR_DOWNSTREAM);
+
+		/* don't go further if this component is not connected */
+		if (!buffer_comp || buffer_comp->comp.type != SOF_COMP_SELECTOR)
+			continue;
+
+		kpb->kd_dev = buffer_comp;
+	}
+}
+
 /* set component audio stream parameters */
 static int kpb_params(struct comp_dev *dev)
 {
 	struct comp_data *cd = comp_get_drvdata(dev);;
 	struct sof_ipc_comp_config *config = COMP_GET_CONFIG(dev);
+	struct comp_data *kpb = comp_get_drvdata(dev);
+	int err;
 
 	trace_kpb("kpb_params(), config->frame_fmt = %u", config->frame_fmt);
 
@@ -130,6 +156,23 @@ static int kpb_params(struct comp_dev *dev)
 	cd->period_bytes = dev->frames * dev->frame_bytes;
 
 	trace_kpb("kpb_params(), period_bytes = %d frames %d", cd->period_bytes, dev->frames);
+
+	/* initial kd_dev if needed */
+	kpb_init_kd_dev(dev);
+	
+	if (kpb->sink_type == SOF_COMP_SELECTOR && kpb->kd_dev) {
+		/* configure detect pipeline audio params */
+//		err = pipeline_params(kpb->kd_dev->pipeline, kpb->kd_dev,
+		err = pipeline_params(kpb->kd_dev->pipeline,
+				      kpb->kd_dev->pipeline->sched_comp,
+				      &dev->params);
+		if (err < 0) {
+			trace_kpb_error("kpb: pipe %d comp %d params failed %d",
+					kpb->kd_dev->pipeline->ipc_pipe.pipeline_id,
+					kpb->kd_dev->comp.id, err);
+			return err;
+		}
+	}
 
 	return 0;
 }
@@ -152,9 +195,30 @@ static void kpb_free(struct comp_dev *dev)
 
 static int kpb_trigger(struct comp_dev *dev, int cmd)
 {
+	struct comp_data *kpb = comp_get_drvdata(dev);
+	int ret = 0;
+
 	trace_kpb("kpb_trigger()");
 
-	return comp_set_state(dev, cmd);
+	ret = comp_set_state(dev, cmd);
+	if (ret)
+		return ret;
+
+	if (kpb->sink_type == SOF_COMP_SELECTOR && kpb->kd_dev) {
+		/* trigger detect pipeline */
+		ret = pipeline_trigger(kpb->kd_dev->pipeline,
+				       kpb->kd_dev->pipeline->sched_comp,
+				       cmd);
+		if (ret < 0) {
+			trace_kpb_error("kpb: pipe %d comp %d prepare failed %d",
+					kpb->kd_dev->pipeline->ipc_pipe.pipeline_id,
+					kpb->kd_dev->comp.id, ret);
+			return ret;
+		}
+	}
+
+	return ret;
+
 }
 
 /**
@@ -168,6 +232,7 @@ static int kpb_trigger(struct comp_dev *dev, int cmd)
 static int kpb_prepare(struct comp_dev *dev)
 {
 	//struct comp_data *cd = comp_get_drvdata(dev);
+	struct comp_data *kpb = comp_get_drvdata(dev);
 	int ret = 0;
 	//int i;
 
@@ -176,6 +241,19 @@ static int kpb_prepare(struct comp_dev *dev)
 	ret = comp_set_state(dev, COMP_TRIGGER_PREPARE);
 	if (ret)
 		return ret;
+
+	if (kpb->sink_type == SOF_COMP_SELECTOR && kpb->kd_dev) {
+		/* prepare detect pipeline */
+		ret = pipeline_prepare(kpb->kd_dev->pipeline,
+				       kpb->kd_dev->pipeline->sched_comp);
+		if (ret < 0) {
+			trace_kpb_error("kpb: pipe %d comp %d prepare failed %d",
+					kpb->kd_dev->pipeline->ipc_pipe.pipeline_id,
+					kpb->kd_dev->comp.id, ret);
+			return ret;
+		}
+	}
+
 
 	return 0;
 
@@ -613,8 +691,24 @@ static void kpb_cache(struct comp_dev *dev, int cmd)
 
 static int kpb_reset(struct comp_dev *dev)
 {
+	struct comp_data *kpb = comp_get_drvdata(dev);
+	int ret = 0;
+
 	/* TODO: what data of KPB should we reset here? */
-	return 0;
+
+	if (kpb->sink_type == SOF_COMP_SELECTOR && kpb->kd_dev) {
+		/* reset detect pipeline */
+		ret = pipeline_reset(kpb->kd_dev->pipeline,
+				     kpb->kd_dev->pipeline->sched_comp);
+		if (ret < 0) {
+			trace_kpb_error("kpb: pipe %d comp %d reset failed %d",
+					kpb->kd_dev->pipeline->ipc_pipe.pipeline_id,
+					kpb->kd_dev->comp.id, ret);
+			return ret;
+		}
+	}
+
+	return ret;
 }
 
 struct comp_driver comp_kpb = {
