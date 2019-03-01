@@ -118,6 +118,7 @@ struct comp_data {
 	struct kpb_client clients[KPB_MAX_NO_OF_CLIENTS];
 	struct history_buffer his_buf_lp;
 	struct history_buffer his_buf_hp;
+	struct comp_dev *kd_dev;
 	void *r_ptr;
 	uint32_t period_bytes; /**< sink number of period bytes */
 	enum sof_comp_type sink_type;
