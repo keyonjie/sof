@@ -180,7 +180,7 @@ int tb_pipeline_params(struct ipc *ipc, int nch,
 	}
 
 	/* pipeline params */
-	ret = pipeline_params(p, cd, &params);
+	ret = pipeline_params(p, cd, &params.params);
 	if (ret < 0)
 		fprintf(stderr, "error: pipeline_params\n");
 

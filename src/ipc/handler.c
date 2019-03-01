@@ -309,7 +309,7 @@ pipe_params:
 
 	/* configure pipeline audio params */
 	err = pipeline_params(pcm_dev->cd->pipeline, pcm_dev->cd,
-			      (struct sof_ipc_pcm_params *)_ipc->comp_data);
+			      &pcm_params.params);
 	if (err < 0) {
 		trace_ipc_error("ipc: pipe %d comp %d params failed %d",
 				pcm_dev->cd->pipeline->ipc_pipe.pipeline_id,

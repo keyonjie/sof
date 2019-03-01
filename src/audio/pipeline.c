@@ -135,7 +135,7 @@ static int pipeline_for_each_comp(struct comp_dev *current,
 		if (func) {
 			err = func(buffer_comp, data, dir);
 			if (err < 0)
-				break;
+				continue;
 		}
 	}
 
@@ -154,7 +154,7 @@ static int pipeline_comp_complete(struct comp_dev *current, void *data,
 	if (!comp_is_single_pipeline(current, ppl_data->start)) {
 		tracev_pipe_with_ids(ppl_data->p, "pipeline_comp_complete(), "
 				     "current is from another pipeline");
-		return 0;
+		return -EINVAL;
 	}
 
 	/* complete component init */
@@ -259,7 +259,7 @@ int pipeline_free(struct pipeline *p)
 
 static int pipeline_comp_params(struct comp_dev *current, void *data, int dir)
 {
-	struct pipeline_data *ppl_data = data;
+	struct sof_ipc_stream_params *params = data;
 	int err = 0;
 
 	tracev_pipe("pipeline_comp_params(), current->comp.id = %u, dir = %u",
@@ -270,14 +270,14 @@ static int pipeline_comp_params(struct comp_dev *current, void *data, int dir)
 		return 0;
 
 	/* send current params to the component */
-	current->params = ppl_data->params->params;
+	current->params = *params;
 
 	err = comp_params(current);
 	if (err < 0 || err > 0)
 		return err;
 
 	/* save params changes made by component */
-	ppl_data->params->params = current->params;
+	*params = current->params;
 
 	return pipeline_for_each_comp(current, &pipeline_comp_params, data,
 				      NULL, dir);
@@ -296,19 +296,19 @@ static int pipeline_comp_params(struct comp_dev *current, void *data, int dir)
  * Params are always modified in the direction of host PCM to DAI.
  */
 int pipeline_params(struct pipeline *p, struct comp_dev *host,
-		    struct sof_ipc_pcm_params *params)
+		    struct sof_ipc_stream_params *params)
 {
-	struct pipeline_data data;
+//	struct pipeline_data data;
 	int ret;
 	uint32_t flags;
 
 	trace_pipe_with_ids(p, "pipeline_params()");
 
-	data.params = params;
+//	data.params = params;
 
 	spin_lock_irq(&p->lock, flags);
 
-	ret = pipeline_comp_params(host, &data, host->params.direction);
+	ret = pipeline_comp_params(host, (void *)params, host->params.direction);
 	if (ret < 0) {
 		trace_pipe_error("pipeline_params() error: ret = %d, host->"
 				 "comp.id = %u", ret, host->comp.id);
@@ -444,11 +444,11 @@ static int pipeline_comp_trigger(struct comp_dev *current, void *data, int dir)
 	struct pipeline_data *ppl_data = data;
 	int err = 0;
 
-	tracev_pipe("pipeline_comp_trigger(), current->comp.id = %u, dir = %u",
+	trace_pipe("pipeline_comp_trigger(), current->comp.id = %u, dir = %u",
 		    current->comp.id, dir);
 
 	if (!comp_is_single_pipeline(current, ppl_data->start)) {
-		tracev_pipe_with_ids(current->pipeline, "pipeline_comp_trigger"
+		trace_pipe_with_ids(current->pipeline, "pipeline_comp_trigger"
 				     "(), current is from another pipeline");
 		return 0;
 	}
