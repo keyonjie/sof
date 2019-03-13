@@ -125,6 +125,8 @@ static struct comp_dev *selector_new(struct sof_ipc_comp *comp)
 	if (!dev)
 		return NULL;
 
+return dev;
+
 	sel = (struct sof_ipc_comp_selector *)&dev->comp;
 	memcpy(sel, ipc_sel, sizeof(struct sof_ipc_comp_selector));
 
