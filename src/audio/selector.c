@@ -113,27 +113,28 @@ return 0;
 static struct comp_dev *selector_new(struct sof_ipc_comp *comp)
 {
 	struct comp_dev *dev;
-	struct sof_ipc_comp_selector *sel;
-	struct sof_ipc_comp_selector *ipc_sel =
-		(struct sof_ipc_comp_selector *)comp;
+	struct sof_ipc_comp_selector *ipc_sel;
+	struct sof_ipc_comp_process *ipc_process =
+		(struct sof_ipc_comp_process *)comp;
 	struct comp_data *cd;
 	int ret;
 
 	trace_selector("selector_new()");
 
-	if (IPC_IS_SIZE_INVALID(ipc_sel->config)) {
-		IPC_SIZE_ERROR_TRACE(TRACE_CLASS_SELECTOR, ipc_sel->config);
+	if (IPC_IS_SIZE_INVALID(ipc_process->config)) {
+		IPC_SIZE_ERROR_TRACE(TRACE_CLASS_SELECTOR, ipc_process->config);
 		return NULL;
 	}
 
 	dev = rzalloc(RZONE_RUNTIME, SOF_MEM_CAPS_RAM,
-		      COMP_SIZE(struct sof_ipc_comp_selector));
+		      COMP_SIZE(struct sof_ipc_comp_process));
 	if (!dev)
 		return NULL;
 
+	memcpy(&dev->comp, comp, sizeof(struct sof_ipc_comp_process));
 
-	sel = (struct sof_ipc_comp_selector *)&dev->comp;
-	memcpy(sel, ipc_sel, sizeof(struct sof_ipc_comp_selector));
+	ipc_sel = (struct sof_ipc_comp_selector *)ipc_process->data;
+//	memcpy(sel, ipc_sel, sizeof(struct sof_ipc_comp_selector));
 
 	cd = rzalloc(RZONE_RUNTIME, SOF_MEM_CAPS_RAM, sizeof(*cd));
 	if (!cd) {
