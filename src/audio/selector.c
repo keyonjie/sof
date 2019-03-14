@@ -63,6 +63,12 @@
 static int sel_set_channel_values(struct comp_data *cd, uint32_t in_channels,
 				  uint32_t out_channels, uint32_t ch_idx)
 {
+		trace_selector_error("out_channels = %u"
+				     "in_channels = %u"
+				     "ch_idx = %u", out_channels, in_channels, ch_idx);
+
+
+return 0;
 	/* verify input channels */
 	if (in_channels != SEL_SOURCE_2CH && in_channels != SEL_SOURCE_4CH) {
 		trace_selector_error("sel_set_channel_values() error: "
@@ -125,7 +131,6 @@ static struct comp_dev *selector_new(struct sof_ipc_comp *comp)
 	if (!dev)
 		return NULL;
 
-return dev;
 
 	sel = (struct sof_ipc_comp_selector *)&dev->comp;
 	memcpy(sel, ipc_sel, sizeof(struct sof_ipc_comp_selector));
