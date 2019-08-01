@@ -107,6 +107,38 @@ define(`PCM_CAPTURE_ADD',
 `}', `fatal_error(`Invalid parameters ($#) to PCM_CAPTURE_ADD')')'
 )
 
+dnl PCM_CAPTURE_LP_ADD(name, pcm_id, capture)
+define(`PCM_CAPTURE_LP_ADD',
+`ifelse(`$#', `3',
+`SectionVendorTuples."$1_tuples_w" {'
+`       tokens "sof_stream_tokens"'
+`       tuples."bool" {'
+`               SOF_TKN_STREAM_CAPTURE_COMPATIBLE_D0I3        "true"'
+`       }'
+`}'
+`SectionData."$1_data_w" {'
+`       tuples "$1_tuples_w"'
+`}'
+`SectionPCM.STR($1) {'
+`'
+`	# used for binding to the PCM'
+`	id STR($2)'
+`'
+`	dai.STR($1 $2) {'
+`		id STR($2)'
+`	}'
+`'
+`	pcm."capture" {'
+`'
+`		capabilities STR($3)'
+`	}'
+`'
+`       data ['
+`               "$1_data_w"'
+`       ]'
+`}', `fatal_error(`Invalid parameters ($#) to PCM_CAPTURE_LP_ADD')')'
+)
+
 dnl PCM_DUPLEX_ADD(name, pcm_id, playback, capture)
 define(`PCM_DUPLEX_ADD',
 `ifelse(`$#', `4',
