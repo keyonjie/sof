@@ -92,3 +92,8 @@ SectionVendorTokens."sof_tone_tokens" {
 SectionVendorTokens."sof_process_tokens" {
 	SOF_TKN_PROCESS_TYPE			"900"
 }
+
+SectionVendorTokens."sof_stream_tokens" {
+	SOF_TKN_STREAM_PLAYBACK_COMPATIBLE_D0I3		"1200"
+	SOF_TKN_STREAM_CAPTURE_COMPATIBLE_D0I3		"1201"
+}
