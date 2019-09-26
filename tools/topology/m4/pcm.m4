@@ -88,28 +88,9 @@ define(`PCM_PLAYBACK_ADD',
 `}', `fatal_error(`Invalid parameters ($#) to PCM_PLAYBACK_ADD')')'
 )
 
-dnl PCM_CAPTURE_ADD(name, pcm_id, capture)
-define(`PCM_CAPTURE_ADD',
-`ifelse(`$#', `3',
-`SectionPCM.STR($1) {'
-`'
-`	# used for binding to the PCM'
-`	id STR($2)'
-`'
-`	dai.STR($1 $2) {'
-`		id STR($2)'
-`	}'
-`'
-`	pcm."capture" {'
-`'
-`		capabilities STR($3)'
-`	}'
-`}', `fatal_error(`Invalid parameters ($#) to PCM_CAPTURE_ADD')')'
-)
-
-dnl PCM_CAPTURE_LP_ADD(name, pcm_id, capture)
-define(`PCM_CAPTURE_LP_ADD',
-`ifelse(`$#', `3',
+dnl PCM_CAPTURE_ADD_COMMON(name, pcm_id, capture, lp)
+define(`PCM_CAPTURE_ADD_COMMON',
+`ifelse(`$4', `1',
 `SectionVendorTuples."$1_tuples_w" {'
 `       tokens "sof_stream_tokens"'
 `       tuples."bool" {'
@@ -118,7 +99,7 @@ define(`PCM_CAPTURE_LP_ADD',
 `}'
 `SectionData."$1_data_w" {'
 `       tuples "$1_tuples_w"'
-`}'
+`}',')'
 `SectionPCM.STR($1) {'
 `'
 `	# used for binding to the PCM'
@@ -132,10 +113,24 @@ define(`PCM_CAPTURE_LP_ADD',
 `'
 `		capabilities STR($3)'
 `	}'
-`'
-`       data ['
+`ifelse(`$4', `1',
+`   data ['
 `               "$1_data_w"'
-`       ]'
+`   ]')'
+`}'
+)
+
+dnl PCM_CAPTURE_ADD(name, pcm_id, capture)
+define(`PCM_CAPTURE_ADD',
+`ifelse(`$#', `3',
+` PCM_CAPTURE_ADD_COMMON(name, pcm_id, capture, 0)
+`}', `fatal_error(`Invalid parameters ($#) to PCM_CAPTURE_ADD')')'
+)
+
+dnl PCM_CAPTURE_LP_ADD(name, pcm_id, capture)
+define(`PCM_CAPTURE_LP_ADD',
+`ifelse(`$#', `3',
+` PCM_CAPTURE_ADD_COMMON(name, pcm_id, capture, 1)
 `}', `fatal_error(`Invalid parameters ($#) to PCM_CAPTURE_LP_ADD')')'
 )
 
