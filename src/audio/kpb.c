@@ -960,6 +960,7 @@ static void kpb_init_draining(struct comp_dev *dev, struct kpb_client *cli)
 		 * take place. This time will be used to synchronize us with
 		 * an end application interrupts.
 		 */
+if (0)
 		drain_interval = (host_period_size / bytes_per_ms) *
 				 ticks_per_ms;
 		/* In draining intervals we fill only half of host buffer.
