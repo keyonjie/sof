@@ -183,7 +183,8 @@ static int mux_params(struct comp_dev *dev,
 		      struct sof_ipc_stream_params *params)
 {
 	struct comp_data *cd = comp_get_drvdata(dev);
-	struct comp_buffer *muxed_buf;
+	struct comp_buffer *muxed_buf, *branch_buf;
+	struct list_item *clist;
 	int err;
 
 	comp_info(dev, "mux_params()");
@@ -195,17 +196,37 @@ static int mux_params(struct comp_dev *dev,
 	}
 
 	/* get the params from the muxed buffer (the "1' in 1->N or N->1) */
-	if (dev->comp.type == SOF_COMP_MUX)
+	if (dev->comp.type == SOF_COMP_MUX) {
 		/* N->1 mux, get the sink buffer */
 		muxed_buf = list_first_item(&dev->bsink_list,
 					    struct comp_buffer,
 					    source_list);
-	else
+		if (params->direction == SOF_IPC_STREAM_PLAYBACK) {
+			/* align frame_format for all sources */
+			list_for_item(clist, &dev->bsource_list) {
+				branch_buf = container_of(clist,
+							  struct comp_buffer,
+							  sink_list);
+				branch_buf->stream.frame_fmt =
+					params->frame_fmt;
+			}
+		}
+	} else {
 		/* 1->N demux, get the source buffer */
 		muxed_buf = list_first_item(&dev->bsource_list,
 					    struct comp_buffer,
 					    sink_list);
-
+		if (params->direction == SOF_IPC_STREAM_CAPTURE) {
+			/* align frame_format for all sinks */
+			list_for_item(clist, &dev->bsink_list) {
+				branch_buf = container_of(clist,
+							  struct comp_buffer,
+							  source_list);
+				branch_buf->stream.frame_fmt =
+					params->frame_fmt;
+			}
+		}
+	}
 	cd->config.num_channels = muxed_buf->stream.channels;
 	cd->config.frame_format = muxed_buf->stream.frame_fmt;
 
