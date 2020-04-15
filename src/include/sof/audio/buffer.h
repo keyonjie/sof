@@ -276,4 +276,15 @@ static inline int buffer_set_params(struct comp_buffer *buffer,
 	return 0;
 }
 
+static inline bool buffer_ffmt_match(struct comp_buffer *buffer,
+				     struct sof_ipc_stream_params *params)
+{
+	if (!params || !buffer) {
+		trace_buffer_error("buffer_params_match(): invalid");
+		return false;
+	}
+
+	return buffer->stream.frame_fmt == params->frame_fmt;
+}
+
 #endif /* __SOF_AUDIO_BUFFER_H__ */
