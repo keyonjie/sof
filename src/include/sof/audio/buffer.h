@@ -276,4 +276,23 @@ static inline int buffer_set_params(struct comp_buffer *buffer,
 	return 0;
 }
 
+/*
+ * This should be used for pipeline params negotiation only,
+ * where the component has more than 1 input or output, and
+ * the component itself only doing channel muxing/demuxing
+ * only so no frame_fmt or rate varies among buffers connected
+ * to it.
+ */
+static inline bool buffer_params_match(struct comp_buffer *buffer,
+				       struct sof_ipc_stream_params *params)
+{
+	if (!params || !buffer) {
+		trace_buffer_error("buffer_params_match(): invalid");
+		return false;
+	}
+
+	return buffer->stream.frame_fmt == params->frame_fmt &&
+		buffer->stream.rate == params->rate;
+}
+
 #endif /* __SOF_AUDIO_BUFFER_H__ */
