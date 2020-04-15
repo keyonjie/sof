@@ -146,6 +146,7 @@ struct pipeline_walk_context {
  * It requires function pointer for recursion.
  */
 static int pipeline_for_each_comp(struct comp_dev *current,
+				  struct comp_buffer *calling_buf,
 				  struct pipeline_walk_context *ctx,
 				  int dir)
 {
@@ -157,6 +158,9 @@ static int pipeline_for_each_comp(struct comp_dev *current,
 	/* run this operation further */
 	list_for_item(clist, buffer_list) {
 		buffer = buffer_from_list(clist, struct comp_buffer, dir);
+		/* don't go back to the calling buffer */
+		if (buffer == calling_buf)
+			continue;
 
 		/* execute operation on buffer */
 		if (ctx->buff_func)
@@ -200,7 +204,7 @@ static int pipeline_comp_complete(struct comp_dev *current,
 	current->period = ppl_data->p->ipc_pipe.period;
 	current->priority = ppl_data->p->ipc_pipe.priority;
 
-	pipeline_for_each_comp(current, ctx, dir);
+	pipeline_for_each_comp(current, calling_buf, ctx, dir);
 
 	return 0;
 }
@@ -258,7 +262,7 @@ static int pipeline_comp_free(struct comp_dev *current,
 	/* complete component free */
 	current->pipeline = NULL;
 
-	pipeline_for_each_comp(current, ctx, dir);
+	pipeline_for_each_comp(current, calling_buf, ctx, dir);
 
 	/* disconnect source from buffer */
 	irq_local_disable(flags);
@@ -343,7 +347,7 @@ static int pipeline_comp_hw_params(struct comp_dev *current,
 	pipe_cl_dbg("pipeline_comp_hw_params(), current->comp.id = %u, dir = %u",
 		    dev_comp_id(current), dir);
 
-	pipeline_for_each_comp(current, ctx, dir);
+	pipeline_for_each_comp(current, calling_buf, ctx, dir);
 
 	/* Fetch hardware stream parameters from DAI component */
 	if (dev_comp_type(current) == SOF_COMP_DAI) {
@@ -411,7 +415,7 @@ static int pipeline_comp_params(struct comp_dev *current,
 	if (err < 0 || err == PPL_STATUS_PATH_STOP)
 		return err;
 
-	return pipeline_for_each_comp(current, ctx, dir);
+	return pipeline_for_each_comp(current, calling_buf, ctx, dir);
 }
 
 /* Send pipeline component params from host to endpoints.
@@ -564,7 +568,7 @@ static int pipeline_comp_prepare(struct comp_dev *current,
 	if (err < 0 || err == PPL_STATUS_PATH_STOP)
 		return err;
 
-	return pipeline_for_each_comp(current, ctx, dir);
+	return pipeline_for_each_comp(current, calling_buf, ctx, dir);
 }
 
 /* prepare the pipeline for usage */
@@ -639,7 +643,7 @@ static int pipeline_comp_trigger(struct comp_dev *current,
 
 	pipeline_comp_trigger_sched_comp(current->pipeline, current, ctx);
 
-	return pipeline_for_each_comp(current, ctx, dir);
+	return pipeline_for_each_comp(current, calling_buf, ctx, dir);
 }
 
 /*
@@ -794,7 +798,7 @@ static int pipeline_comp_reset(struct comp_dev *current,
 	if (err < 0 || err == PPL_STATUS_PATH_STOP)
 		return err;
 
-	return pipeline_for_each_comp(current, ctx, dir);
+	return pipeline_for_each_comp(current, calling_buf, ctx, dir);
 }
 
 /* reset the whole pipeline */
@@ -847,7 +851,7 @@ static int pipeline_comp_copy(struct comp_dev *current,
 			return err;
 	}
 
-	err = pipeline_for_each_comp(current, ctx, dir);
+	err = pipeline_for_each_comp(current, calling_buf, ctx, dir);
 	if (err < 0 || err == PPL_STATUS_PATH_STOP)
 		return err;
 
@@ -915,7 +919,7 @@ static int pipeline_comp_timestamp(struct comp_dev *current,
 		return -1;
 	}
 
-	return pipeline_for_each_comp(current, ctx, dir);
+	return pipeline_for_each_comp(current, calling_buf, ctx, dir);
 }
 
 /* Get the timestamps for host and first active DAI found. */
@@ -956,7 +960,7 @@ static int pipeline_comp_xrun(struct comp_dev *current,
 		ipc_msg_send(ppl_data->p->msg, ppl_data->posn, true);
 	}
 
-	return pipeline_for_each_comp(current, ctx, dir);
+	return pipeline_for_each_comp(current, calling_buf, ctx, dir);
 }
 
 /* Send an XRUN to each host for this component. */
