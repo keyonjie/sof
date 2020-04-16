@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// Copyright(c) 2016 Intel Corporation. All rights reserved.
+// Copyright(c) 2020 Intel Corporation. All rights reserved.
 //
 // Author: Bartosz Kokoszko <bartoszx.kokoszko@linux.intel.com>
 
@@ -13,12 +13,19 @@
 
 /** IPC blob types */
 #define SOF_SMART_AMP_CONFIG	0
+#define SOF_SMART_AMP_MODEL     1
 
 enum {
         SMART_AMP_MODE_PASSTHROUGH,
         SMART_AMP_MODE_PROC_FEEDBACK,
         SMART_AMP_MODE_NOCODEC_FEEDBACK,
         SMART_AMP_MODE_AMOUNT
+};
+
+struct smart_amp_model_data {
+        uint32_t data_size;
+        void *data;
+        uint32_t data_pos;
 };
 
 struct sof_smart_amp_config {
