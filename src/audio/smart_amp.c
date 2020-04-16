@@ -105,6 +105,123 @@ static int smart_amp_set_config(struct comp_dev *dev,
 	return 0;
 }
 
+static int smart_amp_get_config(struct comp_dev *dev,
+				struct sof_ipc_ctrl_data *cdata, int size)
+{
+	struct smart_amp_data *sad = comp_get_drvdata(dev);
+	size_t bs;
+	int ret = 0;
+
+	comp_info(dev, "smart_amp_get_config()");
+
+	// Copy back to user space 
+	bs = sad->config.size;
+	comp_info(dev, "smart_amp_get_config(): block size: %u", bs);
+
+	if (bs == 0 || bs > size)
+		return -EINVAL;
+
+	ret = memcpy_s(cdata->data->data, size, &sad->config, bs);
+	assert(!ret);
+
+	cdata->data->abi = SOF_ABI_VERSION;
+	cdata->data->size = bs;
+
+	return ret;
+}
+
+static int smart_amp_ctrl_get_bin_data(struct comp_dev *dev,
+				       struct sof_ipc_ctrl_data *cdata,
+				       int size)
+{
+	int ret = 0;
+
+	switch (cdata->data->type) {
+	case SOF_SMART_AMP_CONFIG:
+		ret = smart_amp_get_config(dev, cdata, size);
+		break;
+	default:
+		comp_err(dev, "smart_amp_ctrl_get_bin_data(): unknown binary data type");
+		break;
+	}
+
+	return ret;
+}
+
+static int smart_amp_ctrl_get_data(struct comp_dev *dev,
+				   struct sof_ipc_ctrl_data *cdata, int size)
+{
+	int ret = 0;
+
+	comp_info(dev, "smart_amp_ctrl_get_data() size: %d", size);
+
+	switch (cdata->cmd) {
+	case SOF_CTRL_CMD_BINARY:
+		ret = smart_amp_ctrl_get_bin_data(dev, cdata, size);
+		break;
+	default:
+		comp_err(dev, "smart_amp_ctrl_get_data(): invalid cdata->cmd");
+		return -EINVAL;
+	}
+
+	return ret;
+}
+
+static int smart_amp_ctrl_set_bin_data(struct comp_dev *dev,
+				       struct sof_ipc_ctrl_data *cdata)
+{
+	int ret = 0;
+
+	if (dev->state != COMP_STATE_READY) {
+		/* It is a valid request but currently this is not
+		 * supported during playback/capture. The driver will
+		 * re-send data in next resume when idle and the new
+		 * configuration will be used when playback/capture
+		 * starts.
+		 */
+		comp_err(dev, "smart_amp_ctrl_set_bin_data(): driver is busy");
+		return -EBUSY;
+	}
+
+	switch (cdata->data->type) {
+	case SOF_SMART_AMP_CONFIG:
+		ret = smart_amp_set_config(dev, cdata);
+		break;
+	default:
+		comp_err(dev, "smart_amp_ctrl_set_bin_data(): unknown binary data type");
+		break;
+	}
+
+	return ret;
+}
+
+static int smart_amp_ctrl_set_data(struct comp_dev *dev,
+				   struct sof_ipc_ctrl_data *cdata)
+{
+	int ret = 0;
+
+	/* Check version from ABI header */
+	if (SOF_ABI_VERSION_INCOMPATIBLE(SOF_ABI_VERSION, cdata->data->abi)) {
+		comp_err(dev, "smart_amp_ctrl_set_data(): invalid version");
+		return -EINVAL;
+	}
+
+	switch (cdata->cmd) {
+	case SOF_CTRL_CMD_ENUM:
+		comp_info(dev, "smart_amp_ctrl_set_data(), SOF_CTRL_CMD_ENUM");
+		break;
+	case SOF_CTRL_CMD_BINARY:
+		comp_info(dev, "smart_amp_ctrl_set_data(), SOF_CTRL_CMD_BINARY");
+		ret = smart_amp_ctrl_set_bin_data(dev, cdata);
+		break;
+	default:
+		comp_err(dev, "smart_amp_ctrl_set_data(): invalid cdata->cmd");
+		ret = -EINVAL;
+		break;
+	}
+
+	return ret;
+}
 
 /* used to pass standard and bespoke commands (with data) to component */
 static int smart_amp_cmd(struct comp_dev *dev, int cmd, void *data,
@@ -118,7 +235,9 @@ static int smart_amp_cmd(struct comp_dev *dev, int cmd, void *data,
 
 	switch (cmd) {
 	case COMP_CMD_SET_DATA:
-		return smart_amp_set_config(dev, cdata);
+		return smart_amp_ctrl_set_data(dev, cdata);
+	case COMP_CMD_GET_DATA:
+		return smart_amp_ctrl_get_data(dev, cdata, max_data_size);
 	default:
 		return -EINVAL;
 	}

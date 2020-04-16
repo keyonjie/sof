@@ -11,6 +11,9 @@
 
 #define SMART_AMP_MAX_STREAM_CHAN   8
 
+/** IPC blob types */
+#define SOF_SMART_AMP_CONFIG	0
+
 enum {
         SMART_AMP_MODE_PASSTHROUGH,
         SMART_AMP_MODE_PROC_FEEDBACK,
