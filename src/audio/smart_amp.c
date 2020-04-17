@@ -33,6 +33,7 @@ static struct comp_dev *smart_amp_new(const struct comp_driver *drv,
 	struct smart_amp_data *sad;
 	struct sof_smart_amp_config *cfg;
 	size_t bs;
+	int i;
 
 	comp_cl_info(&comp_smart_amp, "smart_amp_new()");
 
@@ -74,6 +75,25 @@ static struct comp_dev *smart_amp_new(const struct comp_driver *drv,
 	}
 
 	memcpy_s(&sad->config, sizeof(struct sof_smart_amp_config), cfg, bs);
+
+	comp_info(dev, "smart_amp_new(), sad->config: size:0x%x",
+		sad->config.size);
+
+	sad->config.size = 0x14;
+
+	sad->config.feedback_channels = 8;
+	
+	for (i = 0; i <PLATFORM_MAX_CHANNELS; i++ ) {
+		comp_info(dev, "smart_amp_new(), sad->config: source map[i]:0x%2x, fb map[i]:0x%2x",
+			sad->config.source_ch_map[i], sad->config.feedback_ch_map[i]);
+		sad->config.source_ch_map[i] = -1;
+		sad->config.feedback_ch_map[i] = -1;
+	}
+
+	sad->config.source_ch_map[0] = 0x00;
+	sad->config.source_ch_map[1] = 0x01;
+	sad->config.feedback_ch_map[2] = 0x00;
+	sad->config.feedback_ch_map[3] = 0x01;
 
 	dev->state = COMP_STATE_READY;
 
@@ -235,7 +255,7 @@ static int smart_amp_process_s32(struct comp_dev *dev,
 	int i;
 	int j;
 
-	comp_info(dev, "smart_amp_process_s32()");
+	comp_info(dev, "smart_amp_process_s32(), out_chan:%d", sad->out_channels);
 
 	for (i = 0; i < frames; i++) {
 		for (j = 0 ; j < sad->out_channels; j++) {
@@ -243,6 +263,7 @@ static int smart_amp_process_s32(struct comp_dev *dev,
 				src = audio_stream_read_frag_s32(source, in_buff_frag + chan_map[j]);	
 				dest = audio_stream_write_frag_s32(sink, out_buff_frag);
 				*dest = *src;
+//			comp_info(dev, "j:%d, out_buff_frag:%d", j, out_buff_frag);
 			}
 			out_buff_frag++;
 		}
@@ -290,6 +311,7 @@ static int smart_amp_copy(struct comp_dev *dev)
 	uint32_t sink_flags;
 	uint32_t feedback_flags;
 	int ret = 0;
+	int i;
 
 	comp_dbg(dev, "smart_amp_copy()");
 
@@ -323,6 +345,13 @@ static int smart_amp_copy(struct comp_dev *dev)
 		comp_dbg(dev, "smart_amp_copy(): processing %d feedback bytes",
 		  	feedback_bytes);
 
+		comp_info(dev, "smart_amp_copy(), feedback_buf, channels:%d, frame_fmt:%d",
+			sad->feedback_buf->stream.channels,
+			sad->feedback_buf->stream.frame_fmt);
+
+		for (i = 0; i <PLATFORM_MAX_CHANNELS; i++ )
+		comp_info(dev, "smart_amp_copy(), feedback_ch_map:%d",
+			sad->config.feedback_ch_map[i]);
 		smart_amp_process(dev, avail_frames, sad->feedback_buf, sad->sink_buf,
 			  sad->config.feedback_ch_map);
 
@@ -339,6 +368,14 @@ static int smart_amp_copy(struct comp_dev *dev)
 	sink_bytes = avail_frames *
 		audio_stream_frame_bytes(&sad->sink_buf->stream);
 	buffer_unlock(sad->sink_buf, sink_flags);
+
+	comp_info(dev, "smart_amp_copy(), source_buf, channels:%d, frame_fmt:%d",
+		sad->source_buf->stream.channels,
+		sad->source_buf->stream.frame_fmt);
+
+	for (i = 0; i <PLATFORM_MAX_CHANNELS; i++ )
+	comp_info(dev, "smart_amp_copy(), source_ch_map:%d",
+		sad->config.source_ch_map[i]);
 
 	/* process data */
 	smart_amp_process(dev, avail_frames, sad->source_buf, sad->sink_buf,
@@ -397,8 +434,12 @@ static int smart_amp_prepare(struct comp_dev *dev)
 	sad->in_channels = sad->source_buf->stream.channels;
 	sad->out_channels = sad->sink_buf->stream.channels;
 
-	sad->feedback_buf->stream.channels = 8;
-	sad->feedback_buf->stream.frame_fmt = 2;
+	comp_info(dev, "smart_amp_prepare(), in_ch:%d, out_ch:%d, fb_ch:%d, fb_fmt:%d",
+		sad->in_channels, sad->out_channels, sad->feedback_buf->stream.channels,
+		sad->feedback_buf->stream.frame_fmt);
+
+	sad->feedback_buf->stream.channels = sad->config.feedback_channels;
+//	sad->feedback_buf->stream.frame_fmt = 2;
 
 	return 0;
 }
