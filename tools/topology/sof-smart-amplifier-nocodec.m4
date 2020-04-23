@@ -8,6 +8,9 @@ include(`dai.m4')
 include(`pipeline.m4')
 include(`ssp.m4')
 
+# Include TLV library
+include(`common/tlv.m4')
+
 # Include Token library
 include(`sof/tokens.m4')
 
