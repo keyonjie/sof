@@ -383,6 +383,13 @@ static int host_copy_normal(struct comp_dev *dev)
 		return ret;
 	}
 
+	if (hd->chan->status != COMP_STATE_ACTIVE) {
+		ret = dma_start(hd->chan);
+		if (ret < 0)
+			comp_err(dev, "host_trigger(): dma_start() failed, ret = %u",
+				 ret);
+	}
+
 	ret = dma_copy(hd->chan, copy_bytes, flags);
 	if (ret < 0) {
 		comp_cl_err(&comp_host, "host_copy_normal(): dma_copy() failed, ret = %u",
@@ -469,7 +476,7 @@ static int host_trigger(struct comp_dev *dev, int cmd)
 
 	switch (cmd) {
 	case COMP_TRIGGER_START:
-		ret = dma_start(hd->chan);
+//		ret = dma_start(hd->chan);
 		if (ret < 0)
 			comp_err(dev, "host_trigger(): dma_start() failed, ret = %u",
 				 ret);
