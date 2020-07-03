@@ -372,7 +372,7 @@ static int host_copy_normal(struct comp_dev *dev)
 	uint32_t flags = 0;
 	int ret = 0;
 
-	comp_dbg(dev, "host_copy_normal()");
+	comp_info(dev, "host_copy_normal()");
 
 	if (hd->copy_type == COMP_COPY_BLOCKING)
 		flags |= DMA_COPY_BLOCKING;
@@ -876,6 +876,7 @@ static int host_copy(struct comp_dev *dev)
 {
 	struct host_data *hd = comp_get_drvdata(dev);
 
+	comp_info(dev, "host_copy()");
 	if (dev->state != COMP_STATE_ACTIVE)
 		return 0;
 

@@ -586,7 +586,7 @@ static int test_keyword_copy(struct comp_dev *dev)
 	uint32_t frames;
 	uint32_t flags = 0;
 
-	comp_dbg(dev, "test_keyword_copy()");
+	comp_info(dev, "test_keyword_copy()");
 
 	/* keyword components will only ever have 1 source */
 	source = list_first_item(&dev->bsource_list,

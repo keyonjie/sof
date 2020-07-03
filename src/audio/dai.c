@@ -669,7 +669,7 @@ static int dai_copy(struct comp_dev *dev)
 	int ret = 0;
 	uint32_t flags = 0;
 
-	comp_dbg(dev, "dai_copy()");
+	comp_info(dev, "dai_copy()");
 
 	/* get data sizes from DMA */
 	ret = dma_get_data_size(dd->chan, &avail_bytes, &free_bytes);

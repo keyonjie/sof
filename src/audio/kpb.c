@@ -617,7 +617,7 @@ static int kpb_copy(struct comp_dev *dev)
 	uint32_t flags = 0;
 	struct draining_data *dd = &kpb->draining_task_data;
 
-	comp_dbg(dev, "kpb_copy()");
+	comp_info(dev, "kpb_copy()");
 
 	/* Get source and sink buffers */
 	source = list_first_item(&dev->bsource_list, struct comp_buffer,
