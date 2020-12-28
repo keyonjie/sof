@@ -17,4 +17,6 @@ struct icomplex32 {
 
 void fft(struct icomplex32 *inb, struct icomplex32 *outb, uint32_t size, bool ifft);
 void fft_real(struct comp_buffer *src, struct comp_buffer *dst, uint32_t size);
+void fft_real_2(struct comp_buffer *src, struct comp_buffer *dst1,
+		struct comp_buffer *dst2, uint32_t size);
 void ifft_complex(struct comp_buffer *src, struct comp_buffer *dst, uint32_t size);

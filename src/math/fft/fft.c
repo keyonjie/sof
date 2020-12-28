@@ -223,3 +223,59 @@ void ifft_complex(struct comp_buffer *src, struct comp_buffer *dst, uint32_t siz
 	rfree(inb);
 	rfree(outb);
 }
+
+/**
+ * \brief Doing Fast Fourier Transform (FFT) for 2 real input buffers.
+ * \param[in] src - pointer to input buffer (2 channels).
+ * \param[out] dst1 - pointer to output buffer, FFT output for input buffer 1.
+ * \param[out] dst2 - pointer to output buffer, FFT output for input buffer 2.
+ * \param[in] size - input buffer sample count.
+ */
+void fft_real_2(struct comp_buffer *src, struct comp_buffer *dst1,
+		struct comp_buffer *dst2, uint32_t size)
+{
+	struct icomplex32 *inb;
+	struct icomplex32 *outb;
+	int i;
+
+	if (src->stream.channels != 2)
+		return;
+
+	if (src->stream.size < size * sizeof(int32_t) * 2 ||
+	    dst1->stream.size < size * sizeof(struct icomplex32) ||
+	    dst2->stream.size < size * sizeof(struct icomplex32))
+		return;
+
+	inb = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
+		      size * sizeof(struct icomplex32));
+	outb = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
+		       size * sizeof(struct icomplex32));
+
+	/* generate complex inputs */
+	for (i = 0; i < size; i++) {
+		inb[i].real = *((int32_t *)src->stream.addr + 2 * i);
+		inb[i].imag = *((int32_t *)src->stream.addr + 2 * i + 1);
+	}
+
+	/* perform a single FFT transform */
+	fft(inb, outb, size, false);
+
+	/* calculate the outputs */
+	*((int32_t *)dst1->stream.addr) = outb[0].real;
+	*((int32_t *)dst1->stream.addr + 1) = 0;
+	*((int32_t *)dst2->stream.addr) = 0;
+	*((int32_t *)dst2->stream.addr + 1) = -outb[0].imag;
+	for (i = 1; i < size; i++) {
+		*((int32_t *)dst1->stream.addr + 2 * i) =
+			(outb[i].real + outb[size - i].real) / 2;
+		*((int32_t *)dst1->stream.addr + 2 * i + 1) =
+			(outb[i].imag - outb[size - i].imag) / 2;
+		*((int32_t *)dst2->stream.addr + 2 * i) =
+			(outb[i].imag + outb[size - i].imag) / 2;
+		*((int32_t *)dst2->stream.addr + 2 * i + 1) =
+			(outb[size - i].real - outb[i].real) / 2;
+	}
+
+	rfree(inb);
+	rfree(outb);
+}
