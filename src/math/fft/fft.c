@@ -55,22 +55,69 @@ static void icomplex_shift(struct icomplex32 *input, int32_t n, struct icomplex3
 	}
 }
 
+struct fft_plan *fft_plan_new(struct icomplex32 *inb, struct icomplex32 *outb, uint32_t size)
+{
+	struct fft_plan *plan;
+	int lim = 1;
+	int len = 0;
+	int i;
+
+	if (!inb || !outb)
+		return NULL;
+
+	plan = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM, sizeof(struct fft_plan));
+	if (!plan)
+		return NULL;
+
+	/* calculate the exponent of 2 */
+	while (lim < size) {
+		lim <<= 1;
+		len++;
+	}
+
+	plan->size = lim;
+	plan->len = len;
+
+	plan->bit_reverse_idx = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
+					plan->size * sizeof(uint32_t));
+	if (!plan->bit_reverse_idx) {
+		rfree(plan);
+		return NULL;
+	}
+
+	/* set up the bit reverse index */
+	for (i = 1; i < plan->size; ++i)
+		plan->bit_reverse_idx[i] = (plan->bit_reverse_idx[i >> 1] >> 1) |
+					   ((i & 1) << (len - 1));
+
+	plan->inb = inb;
+	plan->outb = outb;
+
+	return plan;
+}
+
+void fft_plan_free(struct fft_plan *plan)
+{
+	if (!plan)
+		return;
+
+	if (!plan->bit_reverse_idx)
+		rfree(plan->bit_reverse_idx);
+
+	rfree(plan);
+}
+
 /**
- * \brief Doing Fast Fourier Transform (FFT) or Inverse FFT (IFFT)
- *	  For input complex buffers.
- * \param[in] inb - pointer to input buffer.
- * \param[in] size - input buffer sample count.
+ * \brief Execute the Fast Fourier Transform (FFT) or Inverse FFT (IFFT)
+ *	  For the configured fft_pan.
+ * \param[in] plan - pointer to fft_plan which will be executed.
  * \param[in] ifft - set to 1 for IFFT and 0 for FFT.
- * \param[out] outb - pointer to output buffer.
  */
-void fft(struct icomplex32 *inb, struct icomplex32 *outb, uint32_t size, bool ifft)
+void fft_execute(struct fft_plan *plan, bool ifft)
 {
 	struct icomplex32 tmp1;
 	struct icomplex32 tmp2;
-	int *bit_reverse_idx;
 	int depth;
-	int lim = 1;
-	int len = 0;
 	int top;
 	int bottom;
 	int index;
@@ -80,38 +127,28 @@ void fft(struct icomplex32 *inb, struct icomplex32 *outb, uint32_t size, bool if
 	int m;
 	int n;
 
-	/* calculate the exponent of 2 */
-	while (lim < size) {
-		lim <<= 1;
-		len++;
-	}
+	if (!plan || !plan->bit_reverse_idx)
+		return;
 
 	/* convert to complex conjugate for ifft */
 	if (ifft) {
-		for (i = 0; i < size; i++)
-			icomplex_conj(&inb[i]);
+		for (i = 0; i < plan->size; i++)
+			icomplex_conj(&plan->inb[i]);
 	}
-
-	bit_reverse_idx = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
-				  lim * sizeof(int32_t));
 
 	/* step 1: re-arrange input in bit reverse order, and shrink the level to avoid overflow */
-	for (i = 1; i < lim; ++i) {
-		bit_reverse_idx[i] = (bit_reverse_idx[i >> 1] >> 1) |
-				     ((i & 1) << (len - 1));
-		icomplex_shift(&inb[i], -len, &outb[bit_reverse_idx[i]]);
-	}
-
-	rfree(bit_reverse_idx);
+	for (i = 1; i < plan->size; ++i)
+		icomplex_shift(&plan->inb[i], (-1) * plan->len,
+			       &plan->outb[plan->bit_reverse_idx[i]]);
 
 	/* step 2: loop to do FFT transform in smaller size */
-	for (depth = 1; depth <= len; ++depth) {
+	for (depth = 1; depth <= plan->len; ++depth) {
 		m = 1 << depth;
 		n = m >> 1;
 		i = FFT_SIZE_MAX >> depth;
 
 		/* doing FFT transforms in size m */
-		for (k = 0; k < lim; k += m) {
+		for (k = 0; k < plan->size; k += m) {
 			/* doing one FFT transform for size m */
 			for (j = 0; j < n; ++j) {
 				index = i * j;
@@ -120,12 +157,12 @@ void fft(struct icomplex32 *inb, struct icomplex32 *outb, uint32_t size, bool if
 				tmp1.real = twiddle_real[index];
 				tmp1.imag = twiddle_imag[index];
 				/* calculate the accumulator: twiddle * bottom */
-				icomplex32_mul(&tmp1, &outb[bottom], &tmp2);
-				tmp1 = outb[top];
+				icomplex32_mul(&tmp1, &plan->outb[bottom], &tmp2);
+				tmp1 = plan->outb[top];
 				/* calculate the top output: top = top + accumulate */
-				icomplex32_add(&tmp1, &tmp2, &outb[top]);
+				icomplex32_add(&tmp1, &tmp2, &plan->outb[top]);
 				/* calculate the bottom output: bottom = top - accumulate */
-				icomplex32_sub(&tmp1, &tmp2, &outb[bottom]);
+				icomplex32_sub(&tmp1, &tmp2, &plan->outb[bottom]);
 			}
 		}
 	}
@@ -137,11 +174,12 @@ void fft(struct icomplex32 *inb, struct icomplex32 *outb, uint32_t size, bool if
 		 * for Q1.31 format. Instead, we need to multiply N to compensate
 		 * the shrink we did in the FFT transform.
 		 */
-		for (i = 0; i < size; i++)
-			icomplex_shift(&outb[i], len, &outb[i]);
+		for (i = 0; i < plan->size; i++)
+			icomplex_shift(&plan->outb[i], plan->len, &plan->outb[i]);
 	}
 }
 
+#ifdef UNIT_TEST
 /**
  * \brief Doing Fast Fourier Transform (FFT) for mono real input buffers.
  * \param[in] src - pointer to input buffer.
@@ -152,6 +190,7 @@ void fft_real(struct comp_buffer *src, struct comp_buffer *dst, uint32_t size)
 {
 	struct icomplex32 *inb;
 	struct icomplex32 *outb;
+	struct fft_plan *plan;
 	int i;
 
 	if (src->stream.channels != 1)
@@ -163,8 +202,16 @@ void fft_real(struct comp_buffer *src, struct comp_buffer *dst, uint32_t size)
 
 	inb = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
 		      size * sizeof(struct icomplex32));
+	if (!inb)
+		return;
 	outb = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
 		       size * sizeof(struct icomplex32));
+	if (!outb)
+		goto err_outb;
+
+	plan = fft_plan_new(inb, outb, size);
+	if (!plan)
+		goto err_plan;
 
 	for (i = 0; i < size; i++) {
 		inb[i].real = *((int32_t *)src->stream.addr + i);
@@ -172,15 +219,19 @@ void fft_real(struct comp_buffer *src, struct comp_buffer *dst, uint32_t size)
 	}
 
 	/* perform a single FFT transform */
-	fft(inb, outb, size, false);
+	fft_execute(plan, false);
 
 	for (i = 0; i < size; i++) {
 		*((int32_t *)dst->stream.addr + 2 * i) = outb[i].real;
 		*((int32_t *)dst->stream.addr + 2 * i + 1) = outb[i].imag;
 	}
 
-	rfree(inb);
+	fft_plan_free(plan);
+
+err_plan:
 	rfree(outb);
+err_outb:
+	rfree(inb);
 }
 
 /**
@@ -193,6 +244,7 @@ void ifft_complex(struct comp_buffer *src, struct comp_buffer *dst, uint32_t siz
 {
 	struct icomplex32 *inb;
 	struct icomplex32 *outb;
+	struct fft_plan *plan;
 	int i;
 
 	if (src->stream.channels != 1)
@@ -204,8 +256,17 @@ void ifft_complex(struct comp_buffer *src, struct comp_buffer *dst, uint32_t siz
 
 	inb = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
 		      size * sizeof(struct icomplex32));
+	if (!inb)
+		return;
+
 	outb = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
 		       size * sizeof(struct icomplex32));
+	if (!outb)
+		goto err_outb;
+
+	plan = fft_plan_new(inb, outb, size);
+	if (!plan)
+		goto err_plan;
 
 	for (i = 0; i < size; i++) {
 		inb[i].real = *((int32_t *)src->stream.addr + 2 * i);
@@ -213,15 +274,19 @@ void ifft_complex(struct comp_buffer *src, struct comp_buffer *dst, uint32_t siz
 	}
 
 	/* perform a single IFFT transform */
-	fft(inb, outb, size, true);
+	fft_execute(plan, true);
 
 	for (i = 0; i < size; i++) {
 		*((int32_t *)dst->stream.addr + 2 * i) = outb[i].real;
 		*((int32_t *)dst->stream.addr + 2 * i + 1) = outb[i].imag;
 	}
 
-	rfree(inb);
+	fft_plan_free(plan);
+
+err_plan:
 	rfree(outb);
+err_outb:
+	rfree(inb);
 }
 
 /**
@@ -236,6 +301,7 @@ void fft_real_2(struct comp_buffer *src, struct comp_buffer *dst1,
 {
 	struct icomplex32 *inb;
 	struct icomplex32 *outb;
+	struct fft_plan *plan;
 	int i;
 
 	if (src->stream.channels != 2)
@@ -248,8 +314,17 @@ void fft_real_2(struct comp_buffer *src, struct comp_buffer *dst1,
 
 	inb = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
 		      size * sizeof(struct icomplex32));
+	if (!inb)
+		return;
+
 	outb = rzalloc(SOF_MEM_ZONE_RUNTIME, 0, SOF_MEM_CAPS_RAM,
 		       size * sizeof(struct icomplex32));
+	if (!outb)
+		goto err_outb;
+
+	plan = fft_plan_new(inb, outb, size);
+	if (!plan)
+		goto err_plan;
 
 	/* generate complex inputs */
 	for (i = 0; i < size; i++) {
@@ -258,7 +333,7 @@ void fft_real_2(struct comp_buffer *src, struct comp_buffer *dst1,
 	}
 
 	/* perform a single FFT transform */
-	fft(inb, outb, size, false);
+	fft_execute(plan, false);
 
 	/* calculate the outputs */
 	*((int32_t *)dst1->stream.addr) = outb[0].real;
@@ -276,6 +351,11 @@ void fft_real_2(struct comp_buffer *src, struct comp_buffer *dst1,
 			(outb[size - i].real - outb[i].real) / 2;
 	}
 
-	rfree(inb);
+	fft_plan_free(plan);
+
+err_plan:
 	rfree(outb);
+err_outb:
+	rfree(inb);
 }
+#endif
